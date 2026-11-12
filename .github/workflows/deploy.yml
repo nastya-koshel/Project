@@ -1,23 +1,34 @@
 name: Build and Deploy
+
 on:
- push:
-branches: [ main ] # Триггер при пуше в main
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-build-and-deploy:
-runs-on: self-hosted # Ваш ПК как раннер
-steps:
-- name: Checkout code
-uses: actions/checkout@v3
-- name: Build Docker image
-run: docker build -t my-go-app:${{ github.sha }} .
-- name: Login to GitHub Container Registry
-run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u
-${{ github.actor }} --password-stdin
-- name: Push image
-run: docker push ghcr.io/${{ github.repository }}:latest
-- name: Deploy container
-run: |
-docker stop my-app || true
-docker rm my-app || true
-docker run -d --name my-app -p 8080:8080 ghcr.io/${{
-github.repository }}:latest
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_NAME=ghcr.io/${{ github.repository }}
+          IMAGE_NAME=${IMAGE_NAME,,} # Переводим имя репозитория в нижний регистр
+          docker build -t $IMAGE_NAME:${{ github.sha }} -t $IMAGE_NAME:latest .
+          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:latest
+
+      - name: Deploy container
+        run: |
+          IMAGE_NAME=ghcr.io/${{ github.repository }}
+          IMAGE_NAME=${IMAGE_NAME,,}
+          docker stop my-app || true
+          docker rm my-app || true
+          docker run -d --name my-app --restart unless-stopped -p 8080:8080 $IMAGE_NAME:latest
