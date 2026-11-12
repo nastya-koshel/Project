@@ -1,0 +1,23 @@
+name: Build and Deploy
+on:
+ push:
+branches: [ main ] # Триггер при пуше в main
+jobs:
+build-and-deploy:
+runs-on: self-hosted # Ваш ПК как раннер
+steps:
+- name: Checkout code
+uses: actions/checkout@v3
+- name: Build Docker image
+run: docker build -t my-go-app:${{ github.sha }} .
+- name: Login to GitHub Container Registry
+run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u
+${{ github.actor }} --password-stdin
+- name: Push image
+run: docker push ghcr.io/${{ github.repository }}:latest
+- name: Deploy container
+run: |
+docker stop my-app || true
+docker rm my-app || true
+docker run -d --name my-app -p 8080:8080 ghcr.io/${{
+github.repository }}:latest
